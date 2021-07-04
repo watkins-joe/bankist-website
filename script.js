@@ -836,3 +836,125 @@ logo.classList.contains('c', 'd'); // not includes
 // slider completed
 
 // LECTURE: Lifecycle DOM Events
+
+// events that occur in the dom during a page's lifecycle
+// DOMContentLoaded == fired as soon as the HTML is completed
+// parsed and converted to the DOM tree
+// all scripts must be downloaded  and executed before the
+// DOMContentLoaded can happen
+// does not wait for images or external resources
+
+document.addEventListener('DOMContentLoaded', function (e) {
+  console.log('HTML parsed and DOM tree built!', e);
+});
+
+// we can use this to execute our code only after the DOM is
+// ready, but we dont need to do wrap all of our code into
+// the eventlistener
+
+// addings scripts at end of html means
+// that we don't have to listen to DOMContentLoaded event
+
+// load event
+// load event is fired by the window as soon as not only html is
+// parsed, but all images and external resources like css files
+// are loaded
+
+window.addEventListener('load', function (e) {
+  console.log('Page fully loaded!', e);
+});
+
+// beforeunload event
+// created immediately before a user is about to leave the page
+// so, for example, after clicking the close button in the browser
+// tab
+
+// can use this event to ask users if they are 100% they want
+// to leave the page. in some browsers we have to use
+// e.preventDefault();, in chrome its not necessary.
+
+window.addEventListener('beforeunload', function (e) {
+  e.preventDefault();
+  console.log(e);
+  e.returnValue = '';
+});
+
+// only time to prompt user is when user is in middle of filling
+// out form, or making blog post. take not to not abuse this
+
+// LECTURE: Efficient Script Loading: defer and async attributes
+
+// we have always used the regular way up to this point
+// async or defer attribute will influence file is fetched
+// and executed
+
+// we can write script tag in the head or at the end of
+// the body
+
+// HEAD
+
+// without any attribute in the head --> will parse HTML, pause
+// will find the script, fetch it, execute, and
+// then finish parsing the HTML
+
+// never include the script in the heading, so that all of
+// the HTML is parsed when it reaches the script tag.
+
+// placing the script at the body end, all of the HTML is parsed
+// and the script fetching and execution is done at the end,
+// but it is not perfect. the script could have been downloaded
+// during the HTML parsing
+
+// using async, the script is fetched and executed at the
+// same time, but the HTML code still has to wait. still
+// makes page loading time shorter
+
+// using defer, loading time is similar to async, with defer,
+// the HTML parsing is never interrupted and the execution is
+// done at the end of HTML parsing
+
+// this only applies for scripts included in the head
+
+// those at the body end are loaded and executed at the end
+//  of the HTML parsing anyway
+
+// Regular vs. Async vs. Defer
+
+// END OF BODY //
+
+// Scripts are fetched and executed AFTER the HTML is completely
+// parsed
+
+// Use if you NEED TO support OLD BROWSERS, as async and defer
+// are only in modern browsers.
+
+// ASYNC IN HEAD //
+
+// Scripts are fetched asynchronously and executed immediately
+
+// Usually, the DOMContentLoaded event waits for ALL scripts to
+// execute, except for async scripts. So, DOMContentLoaded does
+// NOT wait for an async script
+
+// Scripts NOT guaranteed to execute in order
+
+// DEFER IN HEAD //
+
+// Scripts are fetched asynchronously and executed AFTER the
+// HTML is completely parsed
+
+// DOMContentLoaded event fires AFTER defer script is executed
+
+// Scripts are executed IN ORDER
+
+////// BEST SOLUTION = DEFER IN HEAD
+// This is overall the best soultion! User for your own scripts
+// and when order matters (e.g. including a library)
+/////
+
+// For any code that your OWN code will not interact with,
+// such as analytics like Google Analytics or ad scripts,
+// you should use async.
+
+// You can use different loading strategies for different scripts
+//
