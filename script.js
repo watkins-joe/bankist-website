@@ -1,725 +1,838 @@
 'use strict';
 
-/////////////////////////////////////////////////
-/////////////////////////////////////////////////
-// BANKIST APP
-
-/////////////////////////////////////////////////
-// Data
-
-// DIFFERENT DATA! Contains movement dates, currency and locale
-
-const account1 = {
-  owner: 'Jonas Schmedtmann',
-  movements: [200, 455.23, -306.5, 25000, -642.21, -133.9, 79.97, 1300],
-  interestRate: 1.2, // %
-  pin: 1111,
-
-  movementsDates: [
-    '2019-11-18T21:31:17.178Z',
-    '2019-12-23T07:42:02.383Z',
-    '2020-01-28T09:15:04.904Z',
-    '2020-04-01T10:17:24.185Z',
-    '2021-06-08T14:11:59.604Z',
-    '2021-06-21T17:01:17.194Z',
-    '2021-06-24T23:36:17.929Z',
-    '2021-06-28T10:51:36.790Z',
-  ],
-  currency: 'EUR',
-  locale: 'pt-PT', // de-DE
-};
-
-const account2 = {
-  owner: 'Jessica Davis',
-  movements: [5000, 3400, -150, -790, -3210, -1000, 8500, -30],
-  interestRate: 1.5,
-  pin: 2222,
-
-  movementsDates: [
-    '2019-11-01T13:15:33.035Z',
-    '2019-11-30T09:48:16.867Z',
-    '2019-12-25T06:04:23.907Z',
-    '2020-01-25T14:18:46.235Z',
-    '2020-02-05T16:33:06.386Z',
-    '2020-04-10T14:43:26.374Z',
-    '2020-06-25T18:49:59.371Z',
-    '2020-07-26T12:01:20.894Z',
-  ],
-  currency: 'USD',
-  locale: 'en-US',
-};
-
-const accounts = [account1, account2];
-
-/////////////////////////////////////////////////
-// Elements
-const labelWelcome = document.querySelector('.welcome');
-const labelDate = document.querySelector('.date');
-const labelBalance = document.querySelector('.balance__value');
-const labelSumIn = document.querySelector('.summary__value--in');
-const labelSumOut = document.querySelector('.summary__value--out');
-const labelSumInterest = document.querySelector('.summary__value--interest');
-const labelTimer = document.querySelector('.timer');
-
-const containerApp = document.querySelector('.app');
-const containerMovements = document.querySelector('.movements');
-
-const btnLogin = document.querySelector('.login__btn');
-const btnTransfer = document.querySelector('.form__btn--transfer');
-const btnLoan = document.querySelector('.form__btn--loan');
-const btnClose = document.querySelector('.form__btn--close');
-const btnSort = document.querySelector('.btn--sort');
-
-const inputLoginUsername = document.querySelector('.login__input--user');
-const inputLoginPin = document.querySelector('.login__input--pin');
-const inputTransferTo = document.querySelector('.form__input--to');
-const inputTransferAmount = document.querySelector('.form__input--amount');
-const inputLoanAmount = document.querySelector('.form__input--loan-amount');
-const inputCloseUsername = document.querySelector('.form__input--user');
-const inputClosePin = document.querySelector('.form__input--pin');
-
-/////////////////////////////////////////////////
-// Functions
-
-const formatCur = function (value, locale, currency) {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: currency, // currency completely independent from locale itself
-  }).format(value);
-};
-
-const formatMovementDate = function (date, locale) {
-  const calcDaysPassed = (date1, date2) =>
-    Math.round(Math.abs(date2 - date1) / (1000 * 60 * 60 * 24));
-
-  const daysPassed = calcDaysPassed(new Date(), date);
-  console.log(daysPassed);
-
-  if (daysPassed === 0) return 'Today';
-  if (daysPassed === 1) return 'Yesterday';
-  if (daysPassed <= 7) return `${daysPassed} days ago`;
-
-  // old way of displaying dates w/o Intl API
-  // const day = `${date.getDate()}`.padStart(2, 0);
-  // const month = `${date.getMonth() + 1}`.padStart(2, 0);
-  // const year = date.getFullYear();
-
-  // return `${month}/${day}/${year}`;
-
-  return new Intl.DateTimeFormat(locale).format(date);
-};
-
-const displayMovements = function (acc, sort = false) {
-  containerMovements.innerHTML = '';
-
-  const movs = sort
-    ? acc.movements.slice().sort((a, b) => a - b)
-    : acc.movements;
-
-  movs.forEach(function (mov, i) {
-    const type = mov > 0 ? 'deposit' : 'withdrawal';
-
-    const date = new Date(acc.movementsDates[i]);
-    const displayDate = formatMovementDate(date, acc.locale);
-
-    const formattedMovement = formatCur(mov, acc.locale, acc.currency);
-
-    const html = `
-      <div class="movements__row">
-        <div class="movements__type movements__type--${type}">${
-      i + 1
-    } ${type}</div>
-        <div class="movements__date">${displayDate}</div>
-        <div class="movements__value">${formattedMovement}</div>
-      </div>
-    `;
-
-    containerMovements.insertAdjacentHTML('afterbegin', html);
-  });
-};
-
-const calcDisplayBalance = function (acc) {
-  acc.balance = acc.movements.reduce((acc, mov) => acc + mov, 0);
-
-  labelBalance.textContent = formatCur(acc.balance, acc.locale, acc.currency);
-};
-
-const calcDisplaySummary = function (acc) {
-  const incomes = acc.movements
-    .filter(mov => mov > 0)
-    .reduce((acc, mov) => acc + mov, 0);
-  labelSumIn.textContent = formatCur(incomes, acc.locale, acc.currency);
-
-  const out = acc.movements
-    .filter(mov => mov < 0)
-    .reduce((acc, mov) => acc + mov, 0);
-  labelSumOut.textContent = formatCur(Math.abs(out), acc.locale, acc.currency);
-
-  const interest = acc.movements
-    .filter(mov => mov > 0)
-    .map(deposit => (deposit * acc.interestRate) / 100)
-    .filter((int, i, arr) => {
-      // console.log(arr);
-      return int >= 1;
-    })
-    .reduce((acc, int) => acc + int, 0);
-  labelSumInterest.textContent = formatCur(interest, acc.locale, acc.currency);
-};
-
-const createUsernames = function (accs) {
-  accs.forEach(function (acc) {
-    acc.username = acc.owner
-      .toLowerCase()
-      .split(' ')
-      .map(name => name[0])
-      .join('');
-  });
-};
-createUsernames(accounts);
-
-const updateUI = function (acc) {
-  // Display movements
-  displayMovements(acc);
-
-  // Display balance
-  calcDisplayBalance(acc);
-
-  // Display summary
-  calcDisplaySummary(acc);
-};
-
-const startLogOutTimer = function () {
-  const tick = function () {
-    const min = String(Math.trunc(time / 60)).padStart(2, 0);
-    const sec = String(time % 60).padStart(2, 0);
-
-    // In each call, print the remaining time to UI
-    labelTimer.textContent = `${min}:${sec}`;
-
-    // When time is at zero seconds, stop timer and logout user
-    if (time === 0) {
-      clearInterval(timer);
-
-      labelWelcome.textContent = `Log in to get started`;
-      containerApp.style.opacity = 0;
-    }
-    // Decrease 1s
-    time--;
-  };
-
-  // Set time to 5 minutes
-  let time = 120;
-
-  // Call the timer every second
-  tick();
-  const timer = setInterval(tick, 1000);
-
-  return timer; // we have to return the timer
-};
+///////////////////////////////////////
+// Selections
+const btnScrollTo = document.querySelector('.btn--scroll-to');
+const section1 = document.querySelector('#section--1');
+const modal = document.querySelector('.modal');
+const overlay = document.querySelector('.overlay');
+const btnCloseModal = document.querySelector('.btn--close-modal');
+const btnsOpenModal = document.querySelectorAll('.btn--show-modal');
+const nav = document.querySelector('.nav');
+const tabs = document.querySelectorAll('.operations__tab');
+const tabsContainer = document.querySelector('.operations__tab-container');
+const tabsContent = document.querySelectorAll('.operations__content');
+const header = document.querySelector('.header'); // logs header
+const allSections = document.querySelectorAll('.section');
 
 ///////////////////////////////////////
-// Event handlers
-let currentAccount, timer;
+// Modal window
 
-// FAKE ALWAYS LOGGED IN
-// currentAccount = account1;
-// updateUI(currentAccount);
-// containerApp.style.opacity = 100;
-
-// Experimenting with API
-
-// will eventually use internationlization to display dates depending
-// on users location
-
-btnLogin.addEventListener('click', function (e) {
-  // Prevent form from submitting
+const openModal = function (e) {
+  // prevents anchor tag from jumping to top of page
+  // on button modal click
   e.preventDefault();
 
-  currentAccount = accounts.find(
-    acc => acc.username === inputLoginUsername.value
+  modal.classList.remove('hidden');
+  overlay.classList.remove('hidden');
+};
+
+const closeModal = function () {
+  modal.classList.add('hidden');
+  overlay.classList.add('hidden');
+};
+
+btnsOpenModal.forEach(btn => btn.addEventListener('click', openModal));
+
+btnCloseModal.addEventListener('click', closeModal);
+overlay.addEventListener('click', closeModal);
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+    closeModal();
+  }
+});
+
+///////////////////////////////////////
+// Button scrolling
+
+// two ways of doing this
+
+// 1.) old-school way
+
+btnScrollTo.addEventListener('click', function (e) {
+  const s1coords = section1.getBoundingClientRect();
+  console.log(s1coords); // DOMRect {...stuff}
+  // DOMRect has a bunch of properties
+
+  console.log(e.target.getBoundingClientRect()); // DOMRect {...stuff}
+
+  // getBoundingClientRect() is relative to the visible viewport
+  // and we can also get current scroll position
+  console.log('Current scroll (X/Y)', window.pageXOffset, window.pageYOffset);
+  // logs Current scroll (X/Y) 0 292
+
+  // can also read the height and width of viewport
+  console.log(
+    'height/width of viewport',
+    document.documentElement.clientHeight,
+    document.documentElement.clientHeight
   );
-  console.log(currentAccount);
+  // logs height/width of viewport 864 864
 
-  if (currentAccount?.pin === Number(inputLoginPin.value)) {
-    // Display UI and message
-    labelWelcome.textContent = `Welcome back, ${
-      currentAccount.owner.split(' ')[0]
-    }`;
-    containerApp.style.opacity = 100;
+  // Scrolling
+  // window.scrollTo(
+  //   s1coords.left + window.pageXOffset,
+  //   s1coords.top + window.pageYOffset
+  // );
+  // top is relative to viewport, not the document
+  // so this does not work
 
-    // Create current date
-    const now = new Date();
-    const options = {
-      hour: 'numeric',
-      minute: 'numeric',
-      day: 'numeric',
-      month: 'numeric',
-      year: 'numeric',
-      // weekday: 'long',
-    };
+  // solution is to add the current scroll position
+  // to the top value to determine the position of the section
+  // relative to the top of the page instead of the viewport
 
-    // const locale = navigator.language;
-    // console.log(locale);
+  // Smooth scrolling
+  // window.scrollTo({
+  //   left: s1coords.left + window.pageXOffset,
+  //   top: s1coords.top + window.pageYOffset,
+  //   behavior: 'smooth',
+  // });
 
-    labelDate.textContent = new Intl.DateTimeFormat(
-      currentAccount.locale,
-      options
-    ).format(now);
-    // const day = `${now.getDate()}`.padStart(2, 0);
-    // const month = `${now.getMonth() + 1}`.padStart(2, 0);
-    // const year = now.getFullYear();
-    // const hour = `${now.getHours()}`.padStart(2, 0);
-    // const minute = `${now.getMinutes()}`.padStart(2, 0);
-
-    // add date near current balance
-    // labelDate.textContent = `${month}/${day}/${year}, ${hour}:${minute}`;
-
-    // Clear input fields
-    inputLoginUsername.value = inputLoginPin.value = '';
-    inputLoginPin.blur();
-
-    // Start logout timer
-    // clear timer if one is running/exists
-    if (timer) clearInterval(timer);
-    // start timer
-    timer = startLogOutTimer();
-
-    // Update UI
-    updateUI(currentAccount);
-  }
+  // 2.) new, modern way
+  section1.scrollIntoView({ behavior: 'smooth' });
 });
 
-btnTransfer.addEventListener('click', function (e) {
-  e.preventDefault();
-  const amount = Number(inputTransferAmount.value);
-  const receiverAcc = accounts.find(
-    acc => acc.username === inputTransferTo.value
-  );
-  inputTransferAmount.value = inputTransferTo.value = '';
+///////////////////////////////////////
+// Page navigation
 
-  if (
-    amount > 0 &&
-    receiverAcc &&
-    currentAccount.balance >= amount &&
-    receiverAcc?.username !== currentAccount.username
-  ) {
-    // Doing the transfer
-    currentAccount.movements.push(-amount);
-    receiverAcc.movements.push(amount);
-
-    // Add transfer date
-    currentAccount.movementsDates.push(new Date().toISOString());
-    receiverAcc.movementsDates.push(new Date().toISOString());
-
-    // Update UI
-    updateUI(currentAccount);
-
-    // Reset timer
-    clearInterval(timer);
-    timer = startLogOutTimer();
-  }
-});
-
-btnLoan.addEventListener('click', function (e) {
-  e.preventDefault();
-
-  const amount = Math.floor(inputLoanAmount.value);
-  // removed Number(), as Math.floor does type coercion
-  // to a number for us
-
-  if (amount > 0 && currentAccount.movements.some(mov => mov >= amount * 0.1)) {
-    setTimeout(function () {
-      // Add movement
-      currentAccount.movements.push(amount);
-
-      // Add loan date
-      currentAccount.movementsDates.push(new Date().toISOString());
-
-      // Update UI
-      updateUI(currentAccount);
-
-      // Reset timer
-      clearInterval(timer);
-      timer = startLogOutTimer();
-    }, 2500);
-  }
-  inputLoanAmount.value = '';
-});
-
-btnClose.addEventListener('click', function (e) {
-  e.preventDefault();
-
-  if (
-    inputCloseUsername.value === currentAccount.username &&
-    Number(inputClosePin.value) === currentAccount.pin
-  ) {
-    const index = accounts.findIndex(
-      acc => acc.username === currentAccount.username
-    );
-    console.log(index);
-    // .indexOf(23)
-
-    // Delete account
-    accounts.splice(index, 1);
-
-    // Hide UI
-    containerApp.style.opacity = 0;
-  }
-
-  inputCloseUsername.value = inputClosePin.value = '';
-});
-
-let sorted = false;
-btnSort.addEventListener('click', function (e) {
-  e.preventDefault();
-  displayMovements(currentAccount, !sorted);
-  sorted = !sorted;
-});
-
-// I did not replace 'Number' with plus sign
-
-// 6-28-2020
-// Added .toFixed(2) to all areas where a number/value is
-// printed on screen to show all numbers with to the second
-// decimal place. ie 25000 becomes 25000.00 and 14.9 becomes
-// 14.90
-
-/////////////////////////////////////////////////
-/////////////////////////////////////////////////
-// LECTURES
-
-// // LECTURE: Converting and Checking Numbers
-
-// // in JS, javascript all numbers are represented internally
-// // as floating points numbers (ie decimals) even if we write
-// // them as integers
-
-// console.log(23 === 23.0);
-
-// // they are always stored in a binary form, or only composed
-// // of zeros and ones.
-
-// // Base 10 - 0 to 9 1/10 = 0.1, 3/10 = 3.33333333
-// // Binary base 2 - 0 and 1
-
-// // console.log(0.1 + 0.2); // 0.30000000000000004
-
-// // this is why JavaScript is not recommended to be used for
-// // financial stuff because of the hanging 4 at the end of
-// // .1 + .2
-
-// console.log(Number('23'));
-
-// // using type coercion
-// console.log(+'23');
-
-// // Parsing
-// // accepts 2nd argument, the radix, or the base of the numeral
-// // system we are using
-// console.log(Number.parseInt('30px', 10));
-// console.log(Number.parseInt('e23', 10));
-
-// console.log(Number.parseInt('2.5rem')); // 2
-// console.log(Number.parseFloat('2.5rem')); // 2.5
-
-// // older way of calling parseFloat, without 'Number' namespace
-// console.log(parseFloat('2.5rem')); // 2.5
-
-// // Check if value is value is not a number (NaN)
-// // not a perfect way of checking is not a number
-// console.log(Number.isNaN(20)); // false
-// console.log(Number.isNaN('20')); // false
-// console.log(Number.isNaN(+'20X')); // true
-// console.log(Number.isNaN(23 / 0)); // false
-
-// // better method => isFinite
-// // Checking if value is a number
-// // this is the best way
-// console.log(Number.isFinite(20)); // true
-// console.log(Number.isFinite('20')); // false
-// console.log(Number.isFinite(+'20X')); // false
-// console.log(Number.isNaN(23 / 0)); // false
-
-// // Check if value is an integer
-// console.log(Number.isInteger(23)); // true
-// console.log(Number.isInteger(23.0)); // true
-// console.log(Number.isInteger(23 / 0)); // false
-
-// // LECTURE: Math and Rounding
-
-// // square root function
-
-// console.log(Math.sqrt(25)); // 5
-// console.log(25 ** (1 / 2)); // 5
-// // cubic root
-// console.log(8 ** (1 / 3)); // 5
-
-// // find max value in set of numbers
-// console.log(Math.max(25, 3, 4, 2, 6)); // 25
-// console.log(Math.max('25', 3, 4, 2)); // 25
-// console.log(Math.max('25px', 3, 4, 2)); // NaN
-
-// // find min value in set of numbers
-// console.log(Math.min(5, 18, 23, 11, 2)); // 2
-
-// // calculate radius of circle
-// // this is how we calculate area of circle with x radius
-// console.log(Math.PI * Number.parseFloat('10px') ** 2);
-
-// // random number with random function
-
-// console.log(Math.trunc(Math.random() * 6) + 1);
-// // rolls from 1 to 6
-
-// // generalized form to generate random numbers
-
-// const randomInt = (min, max) =>
-//   Math.floor(Math.random() * (max - min) + 1) + min;
-
-// console.log(randomInt(3, 5));
-
-// // Rounding integers
-// // removes any decimal part
-// console.log(Math.trunc(23.3)); // 23
-
-// // rounds up or down to nearest whole integer
-// console.log(Math.round(23.3)); // 23
-// console.log(Math.round(23.5)); // 24
-// console.log(Math.round(23.9)); // 24
-
-// // rounds up to nearest whole integer
-// console.log(Math.ceil(23.3)); // 24
-// console.log(Math.ceil(23.9)); // 24
-
-// // rounds down to nearest whole integer
-// console.log(Math.floor(23.3)); // 23
-// console.log(Math.floor(23.9)); // 23
-// console.log(Math.floor('23.9')); // 23
-
-// console.log(Math.trunc(-23.3)); // -23
-// console.log(Math.floor(-23.3)); // -24
-
-// // floor is a little better than trunc, bc it works with
-// // all situations, no matter if we are working with positive
-// // or negative numbers
-
-// // Rounding floating point numbers/decimals
-
-// console.log((2.7).toFixed(0)); // 3, as a string
-// // toFixed always returns a string, not a number
-
-// console.log((2.7).toFixed(3)); // 2.700, as a string
-// console.log((2.7).toFixed(5)); // 2.70000, as a string
-// console.log((2.7).toFixed(4)); // 2.7000, as a string
-
-// // LECTURE: The Remainder Operator
-
-// console.log(5 % 2); // 5 / 2, 2 with a remainder of 1, outputs 1
-// console.log(7 % 3); // 1
-// console.log(8 % 3); // 2
-
-// // a number is even if it is divisible by 2, with no remainder
-// console.log(6 % 2); // 0
-
-// console.log(7 % 2);
-
-// const isEven = n => n % 2 === 0;
-
-// isEven(8); // true
-// isEven(23); // false
-// isEven(514); // true
-
-// labelBalance.addEventListener('click', function () {
-//   [...document.querySelectorAll('.movements__row')].forEach(function (row, i) {
-//     if (i % 2 === 0) row.style.backgroundColor = 'orangered';
-//     // 0, 2, 4, 6
-//     if (i % 3 === 0) row.style.backgroundColor = 'blue';
-//     // at row 0, 3, 6, 9 .ect
+// document.querySelectorAll('.nav__link').forEach(function (el) {
+//   el.addEventListener('click', function (e) {
+//     e.preventDefault();
+//     const id = this.getAttribute('href');
+//     console.log(id);
+//     document.querySelector(id).scrollIntoView({ behavior: 'smooth' });
 //   });
 // });
+// the above code works, but it is not very efficient. the
+// same function is attached to the same three elements.
+// better solution is event delegation.
 
-// // LECTURE: Working with BigInt
-// // new in ES2020
-// // numbers represented internally as 64 bits, 64 1s or 0s
-// // only 53 bits are used to store digits themselves
-// // rest are used for storing position of decimal and the sign
-// // plur or minus
+// in event deleation, we use the fact that events bubble up.
+// and we do that by putting the eventListener on a common
+// parent of all of the elements that we are interested in.
 
-// // since there are only 53 bits used to store numbers,
-// // there is a limit of how big numbers can be
+// event delegation steps
 
-// // we can calc this number
-// console.log(2 ** 53 - 1); // 9007199254740991
-// console.log(Number.MAX_SAFE_INTEGER); // 9007199254740991
-// console.log(2 ** 53 + 1); // 9007199254740992
-// console.log(2 ** 53 + 2); // 9007199254740994
-// console.log(2 ** 53 + 3); // 9007199254740996
-// console.log(2 ** 53 + 4); // 9007199254740996
+// 1.) Add event listener to common parent element
+// 2.) Determine what element originated the event
 
-// // a new primitive was added -- BigInt --
-// // can be used to store numbers as big as we need
+document.querySelector('.nav__links').addEventListener('click', function (e) {
+  e.preventDefault();
+  // console.log(e.target);
+  // logs nav__link, where the event originated
 
-// console.log(91237162984716928376418237642871); // 9.123716298471693e+31
-// console.log(91237162984716928376418237642871n); // 91237162984716928376418237642871n
-// console.log(BigInt(91237162984)); // 91237162984n
-// // appending n to the number makes it a BigInt, can also
-// //use the BigInt function
+  // Matching strategy
+  if (e.target.classList.contains('nav__link')) {
+    const id = e.target.getAttribute('href');
+    document.querySelector(id).scrollIntoView({ behavior: 'smooth' });
+  }
+});
 
-// // Operations
-// console.log(10000n + 10000n); // 20000n
-// console.log(123094178234091823740129384729n * 29812398n);
-// // 3669732632997682617886585789036070142n
-// // console.log(Math.sqrt(16n)); // returns error
+// successfully implemented event delegation
+// we added one big eventhandler function to the parent element
+// and determined where the click event came from, and used
+// matching strategy that ignores clicks from items we don't
+// want
 
-// // cannot
-// const huge = 989872934829328342934879n;
-// const num = 23;
+// more important use case -- working with elements not yet
+// on the page, a great example are buttons added dynamically
+// while using app. its not possible to add eventhandlers
+// to elements that dont exist, but we can still handle events
+// on elements that dont exist at beginning by using event
+// delegation
 
-// // console.log(huge * num);
-// // Error: Cannot mix BigInt and other types
+// Tabbed component
 
-// console.log(huge * BigInt(num)); // this works
+// tabs.forEach(t => t.addEventListener('click', () => console.log('tab')));
+// this is bad practice, what if we had 200 tabs? would have 200
+// copies of this callback function here
 
-// // Exceptions
-// // logical operators and string concatenations
-// console.log(20n > 15); // works, is true
-// console.log(20n === 20); // works, is false
-// console.log(typeof 20n); // bigint
+// instead we will use event delegation, and by doing this
+// we need to attach the event handler on the common parent
+// element of all the elements that we're interest in,
+// an in our case, that is this tabs container
 
-// console.log(huge + ' is REALLY big!!!');
-// // outputs string 989872934829328342934879 is REALLY big!!!
+tabsContainer.addEventListener('click', function (e) {
+  const clicked = e.target.closest('.operations__tab');
+  // finds closest parent with this class name
+  // console.log(clicked);
 
-// // Divisions
-// console.log(11n / 3n); // 3n, cuts off decimal part
-// console.log(10 / 3); // 3.3333333333333335
+  // Ignore any clicks where result is null
 
-// // LECTURE: Creating Dates
+  // Guard clause
+  // an if statement which will return early if some
+  // condition is matched
+  if (!clicked) return;
 
-// // Create a Date
+  // Remove active classes
+  tabs.forEach(t => t.classList.remove('operations__tab--active'));
+  tabsContent.forEach(c => c.classList.remove('operations__content--active'));
 
-// // 4 ways of creating dates
+  // Activate tab
+  clicked.classList.add('operations__tab--active');
 
-// // 1.)
-// // const now = new Date();
-// // console.log(now);
+  // Activate content area
+  // console.log(clicked.dataset.tab);
+  document
+    .querySelector(`.operations__content--${clicked.dataset.tab}`)
+    .classList.add('operations__content--active');
+});
 
-// // // 2.)
-// // console.log(new Date('Tue Jun 29 2021 10:53:49'));
-// // // can pass in how we want the date displayed, JS will parse
-// // // it for us and display date
-// // console.log(new Date('December 24, 2015'));
+// Menu fade animation
 
-// // // trying to parse one of our account movementDates
-// // console.log(new Date(account1.movementsDates[0]));
-// // // outputs Mon Nov 18 2019 15:31:17 GMT-0600 (Central Standard Time)
+const handleHover = function (e) {
+  // console.log(this, e.currentTarget);
+  if (e.target.classList.contains('nav__link')) {
+    const link = e.target;
+    const siblings = link.closest('.nav').querySelectorAll('.nav__link');
+    const logo = link.closest('.nav').querySelector('img');
+    siblings.forEach(el => {
+      if (el !== link) el.style.opacity = this;
+    });
+    logo.style.opacity = this;
+  }
+};
 
-// // console.log(new Date(2037, 10, 19, 15, 23, 5));
-// // // Thu Nov 19 2037 15:23:05 GMT-0600 (Central Standard Time)
-// // // months are zero based
-// // console.log(new Date(2037, 10, 31, 15, 23, 5));
-// // // Tue Dec 01 2037 15:23:05 GMT-0600 (Central Standard Time)
-// // // autocorrected to next day, bc Nov doesnt have 31 days
+// passing "argument" into handler, as it is technically
+// impossible to have more than one argument in an eventhandler
+// function
 
-// // // pass into the date constructor function
-// // // amount of milliseconds passed since the beginning of
-// // // the unix time, Jan 1st, 1970
+// if we want to pass more, we use the this keyword
 
-// // console.log(new Date(0));
-// // console.log(new Date(3 * 24 * 60 * 60 * 1000)); // days to milliseconds
+// this is a workaround so we can pass arguments into handler functions
 
-// // Working with dates
+nav.addEventListener('mouseover', handleHover.bind(0.5));
 
-// const future = new Date(2037, 10, 19, 15, 23);
-// console.log(future); // Thu Nov 19 2037 15:23:00 GMT-0600 (Central Standard Time)
-// console.log(future.getFullYear()); // 2037
-// console.log(future.getMonth()); // 10, zero based --> add 1 = 11
-// console.log(future.getDate()); // 19, day of month
-// console.log(future.getDay()); // 4, day of week
-// console.log(future.getHours()); // 15
-// console.log(future.getMinutes()); // 23
-// console.log(future.getSeconds()); // 0
-// console.log(future.toISOString()); // 2037-11-19T21:23:00.000Z
-// console.log(future.getTime()); // 2142278580000, number of milliseconds passed since Jan 1st 1970 based on future date
+nav.addEventListener('mouseout', handleHover.bind(1));
 
-// console.log(new Date(2142278580000)); // Thu Nov 19 2037 15:23:00 GMT-0600 (Central Standard Time)
-// console.log(Date.now()); // 1624982814589
+// we can do even better and remove the anonymous callback
+// functions entirely, by using the BIND method! sets the
+// this keyword to whatever value we set bind to
 
-// future.setFullYear(2040); // sets year in the future date variable from 2037 to 2040
-// console.log(future); // logs future date with new year
+// // Sticky navigation V1, bad performance version
+// const initialCoords = section1.getBoundingClientRect();
+// console.log(initialCoords);
+// window.addEventListener('scroll', function () {
+//   // make nav sticky as soon as we reach the first section
 
-// LECTURE: Adding Dates to Bankist App
+//   if (window.scrollY > initialCoords.top) nav.classList.add('sticky');
+//   else nav.classList.remove('sticky');
+//   // using scroll event fires all the time, bad performance
+//   // especially on mobile. we will look at another efficient tool.
+// });
 
-// added
+// Sticky Navigation using Intersection Observer API
 
-// // LECTURE: Operations with Dates
+const navHeight = nav.getBoundingClientRect().height;
+console.log(navHeight);
 
-// const future = new Date(2037, 10, 19, 15, 23);
-// console.log(Number(future)); // 2142278580000
+const stickyNav = function (entries) {
+  const [entry] = entries;
+  console.log(entry);
+  if (!entry.isIntersecting) nav.classList.add('sticky');
+  else nav.classList.remove('sticky');
+  // make navigation bar appear exactly before the first section
+  // starts, just like in demo
+};
 
-// // function that returns number of days passed between
-// // two dates
+const headerObserver = new IntersectionObserver(stickyNav, {
+  root: null,
+  // null because we are interested in entire viewport
+  threshold: 0,
+  // rootMargin: '-90px',
+  // root margin applies a box of 90 px which is height of nav
+  // a visual margin, negative to show before
+  // you will want to grab the height of the navbar dynamically
+  // because responsiveness may change height and you do not
+  // want height to be hard coded in this, use template
+  // string and grab the height dynamically by using
+  // nav.getBoundingClientRect().height
+  rootMargin: `-${navHeight}px`,
+});
 
-// const calcDaysPassed = (date1, date2) =>
-//   Math.abs(date2 - date1) / (1000 * 60 * 60 * 24);
+headerObserver.observe(header);
 
-// const days1 = calcDaysPassed(new Date(2037, 3, 14), new Date(2037, 3, 4));
+// Reveal sections
 
-// console.log(days1); // 10
+const revealSection = function (entries, observer) {
+  const [entry] = entries;
+  // console.log(entry);
+  // another guard clause
+  // console.log(entry.isIntersecting);
+  if (!entry.isIntersecting) return;
+  entry.target.classList.remove('section--hidden');
 
-// // display text based on whether something happened today
-// // 1 day ago, 10 days ago.ect 1 week ago.
-// // see functions in the app code. added, works as intended
+  // remove observers when the element has been shown
+  // so that it does not keep observing
+  observer.unobserve(entry.target);
+};
+const sectionObserver = new IntersectionObserver(revealSection, {
+  root: null,
+  threshold: 0.15,
+});
+allSections.forEach(function (section) {
+  sectionObserver.observe(section);
+  section.classList.add('section--hidden');
+});
 
-// LECTURE: Internationalizing Dates (INTL)
-// added dates using locales of users/properties of accounts
+// Lazy loading images
 
-// // LECTURE: Internationalizing Dates (INTL)
-// const num = 832342034.45;
+// grab only images in document with attribute data-src
+const imgTargets = document.querySelectorAll('img[data-src]');
 
-// const options = {
-//   style: 'currency',
-//   unit: 'celsius',
-//   currency: 'EUR', // currency must be defined like so
-//   // useGrouping: false,
+const loadImg = function (entries, observer) {
+  const [entry] = entries;
+  // console.log(entry);
+  if (!entry.isIntersecting) return;
+
+  // Replace src attribute with data-src
+  entry.target.src = entry.target.dataset.src;
+
+  // Listen for load event when image finishes loading
+  entry.target.addEventListener('load', function () {
+    entry.target.classList.remove('lazy-img');
+  });
+  observer.unobserve(entry.target);
+};
+
+const imgObserver = new IntersectionObserver(loadImg, {
+  root: null,
+  threshold: 0,
+  // load images before we reach them
+  rootMargin: '+200px',
+});
+
+imgTargets.forEach(img => imgObserver.observe(img));
+
+// Slider
+
+// create Slider function for the entire slider itself
+// as to not pollute the global namespace
+const sliderFunction = function () {
+  const slides = document.querySelectorAll('.slide');
+  const slider = document.querySelector('.slider');
+  const btnLeft = document.querySelector('.slider__btn--left');
+  const btnRight = document.querySelector('.slider__btn--right');
+  const dotContainer = document.querySelector('.dots');
+
+  let curSlide = 0;
+  const maxSlide = slides.length;
+  // reading length of node list just like an array
+
+  // Functions
+  const createDots = function () {
+    slides.forEach(function (s, i) {
+      dotContainer.insertAdjacentHTML(
+        'beforeend',
+        `<button class="dots__dot" data-slide="${i}"></button>`
+      );
+    });
+  };
+
+  const activateDot = function (slide) {
+    document
+      .querySelectorAll('.dots__dot')
+      .forEach(dot => dot.classList.remove('dots__dot--active'));
+
+    document
+      .querySelector(`.dots__dot[data-slide="${slide}"]`)
+      .classList.add('dots__dot--active');
+  };
+
+  const goToSlide = function (slide) {
+    slides.forEach(
+      (s, i) => (s.style.transform = `translateX(${100 * (i - slide)}%)`)
+    );
+  };
+
+  // Next slide
+  const nextSlide = function () {
+    if (curSlide === maxSlide - 1) {
+      curSlide = 0;
+    } else {
+      // Go to next slide
+      curSlide++;
+    }
+    goToSlide(curSlide);
+    activateDot(curSlide);
+    // -100, 0%, 100%, 200%
+  };
+
+  const prevSlide = function () {
+    if (curSlide === 0) {
+      curSlide = maxSlide - 1;
+    } else {
+      curSlide--;
+    }
+    goToSlide(curSlide);
+    activateDot(curSlide);
+  };
+
+  const initSlider = function () {
+    goToSlide(0);
+    createDots();
+    activateDot(0);
+  };
+
+  initSlider();
+
+  // Event handlers
+  btnRight.addEventListener('click', nextSlide);
+  btnLeft.addEventListener('click', prevSlide);
+
+  // Arrow key event listeners
+  document.addEventListener('keydown', function (e) {
+    console.log(e);
+    if (e.key === 'ArrowLeft') prevSlide();
+    if (e.key === 'ArrowRight') nextSlide();
+  });
+
+  // Using event delegation again, adding handler to dotContainer
+  dotContainer.addEventListener('click', function (e) {
+    if (e.target.classList.contains('dots__dot')) {
+      const slide = e.target.dataset.slide;
+      goToSlide(slide);
+      activateDot(curSlide);
+    }
+  });
+};
+
+// calling slider function
+sliderFunction();
+
+///////////////////////////////////////
+// LECTURES
+
+// LECTURE: How the DOM Really Works
+
+// the dom is the interface between JS and the browser
+
+// Allows us to make JS interact with the browser
+// We can write JS to create, modify, and delete HTML elements,
+// set styles, classes, and attributes; and listen and respond
+// to events
+// DOM tree is generated from an HTML document, which we can then
+// interact with
+// DOM is a very complex API that contains lots of methods and
+// properties to interact with the DOM tree
+
+// Inheritance -- inheritance means all of the child types
+// get access to the methods and properties of all of their
+// parent node types
+
+// document, which we use in DOM manipulation, is just another
+// type of node. .querySelector is available on both
+// document and element node types
+
+// we listen for events by calling the addEventListener method
+// on an element or the document -- why does this work?
+
+// because there is a special node type called EventTarget which
+// is a parent of both the node type and also the window
+// node type. And so with this, thanks to inheritance,
+// we can call addEventListener on every single type of node
+// in the DOM API because all elements as well as document
+// and window and even text and comments will inherit this
+// method, therefore, we will be able to use addEventListener
+// on all of them just as if it was their own method
+
+// NOTE: we never manually create an EvetnTarget object,
+// its just an abstract type that we don't physically use
+// in practice
+
+// // LECTURE: Selecting, Creating, and Deleting Elements
+
+// console.log(document.documentElement); // logs entire HTML
+// console.log(document.head); // logs head
+// console.log(document.body); // logs body
+
+// const header = document.querySelector('.header'); // logs header
+// const allSections = document.querySelectorAll('.section');
+
+// console.log(allSections); // logs sections as NodeList
+
+// document.getElementById('section--1');
+// const allButtons = document.getElementsByTagName('button');
+// console.log(allButtons);
+// // returns HTML collection of buttons, a live-collection.
+// // meaning, if the DOM is updated, the collection is updated
+// // automatically
+
+// // this does NOT happen with a node list. even if you delete
+// // a section, the NodeList does not update itself with new
+// // number of sections
+
+// console.log(document.getElementsByClassName('btn'));
+// // logs HTML collection with all elements with class name that
+// // includes btn
+
+// // Creating and inserting elements
+// // .insertAdjacentHTML
+
+// const message = document.createElement('div');
+// message.classList.add('cookie-message');
+// message.textContent = 'We use cookies for improved functionality and analytics';
+// message.innerHTML =
+//   'We use cookies for improved functionality and analytics <button class="btn btn--close-cookie">Got it!</button>';
+
+// header.prepend(message); // first child
+// // header.append(message); // last child
+// // message is a live element in the dom, it cannot be in two
+// // places at once. we prepended then appended it. it moved
+// // from being the first child to being the last child
+
+// // we can use prepend and append not only to insert elements
+// // but move elements too
+
+// // header.append(message.cloneNode(true));
+// // we can use cloneNode to duplicate the same DOM element
+
+// header.before(message); // before the header
+// header.after(message); // after the header
+
+// // Deleting elements
+
+// // delete cookie message on it's button click
+// document
+//   .querySelector('.btn--close-cookie')
+//   .addEventListener('click', function () {
+//     // remove() is very new
+//     message.remove();
+//     // old way of removing element
+//     // message.parentElement.removeChild(message);
+//     // moving up and down the dom tree is called dom traversing
+//   });
+
+// LECTURE: Styles, Attributes, and Classes
+
+const message = document.createElement('div');
+message.classList.add('cookie-message');
+message.textContent = 'We use cookies for improved functionality and analytics';
+message.innerHTML =
+  'We use cookies for improved functionality and analytics <button class="btn btn--close-cookie">Got it!</button>';
+
+header.after(message); // after the header
+
+document
+  .querySelector('.btn--close-cookie')
+  .addEventListener('click', function () {
+    // remove() is very new
+    message.remove();
+    // old way of removing element
+    // message.parentElement.removeChild(message);
+    // moving up and down the dom tree is called dom traversing
+  });
+
+// Styles
+
+// inline styles set in the DOM
+message.style.backgroundColor = '#37383d';
+message.style.width = '100%';
+
+console.log(message.style.height); // does not work
+console.log(message.style.backgroundColor); // rgb(55, 56, 61)
+// the second one works because we defined it as an inline
+// style.
+
+// we have to use the getComputedStyle function to grab
+// styles that we didnt add in-line
+
+console.log(getComputedStyle(message).color); // rgb(187, 187, 187)
+console.log(getComputedStyle(message).height); // 49px
+
+message.style.height =
+  Number.parseFloat(getComputedStyle(message).height, 10) + 30 + 'px';
+// adds 40 px to height
+
+console.log(getComputedStyle(message).height); // 89px
+
+// changing CSS variables, like in :root
+// document.documentElement.style.setProperty('--color-primary', 'orangered');
+
+// Attributes (src, class, alt.ect)
+const logo = document.querySelector('.nav__logo');
+console.log(logo.alt); // Bankist logo
+console.log(logo.src); // http://127.0.0.1:5500/starter/img/logo.png
+console.log(logo.className); // nav__logo
+
+// added designer attribute to img tag to test functionality
+console.log(logo.designer);
+// undefined, because 'designer' is not a
+// standard property that is expected to be on images.
+
+// use this method to get the attribute that is nonstandard
+// instead
+console.log(logo.getAttribute('designer')); // Jonas
+
+// can also set attributes as well
+logo.alt = 'Beautiful minimalist logo';
+
+logo.setAttribute('company', 'Bankist');
+
+// absolute URL
+console.log(logo.src); // http://127.0.0.1:5500/starter/img/logo.png
+// relative URL
+console.log(logo.getAttribute('src')); // img/logo.png
+
+const link = document.querySelector('.nav__link--btn');
+console.log(link.href); // http://127.0.0.1:5500/starter/index.html#
+console.log(link.getAttribute('href')); // #
+
+// Data attributes
+// special kind of attributes that starts with 'data'
+
+console.log(logo.dataset.versionNumber); // 3.0
+// in order to reference it, you have to transform what follows
+// data with dashes to CAMEL CASE
+// for example: data-version-number becomes versionNumber
+// when using it in JS. dataset is used to grab the data
+// attribute
+
+// the data attributes are always stores in the dataset
+// object
+
+// Classes
+logo.classList.add('c', 'd');
+logo.classList.remove('c', 'd');
+logo.classList.toggle('c', 'd');
+logo.classList.contains('c', 'd'); // not includes
+
+// Don't use! Can also set class.
+// this will OVERWRITE all existing classes with only one class
+// and will only allow us to use one class on an element
+// logo.className = 'Jonas'
+
+// LECTURE: Implementing Smooth Scrolling
+
+// see code below modal window above
+
+// // LECTURE: Types of Events and Event Handlers
+
+// // an event is a signal generated by a certain dom node
+// // and is a signal that something happened
+
+// const h1 = document.querySelector('h1');
+
+// const alertH1 = function (e) {
+//   alert('addEventListener: Great! You are reading the heading!');
+//   h1.removeEventListener('mouseenter', alertH1);
 // };
 
-// console.log('US:', new Intl.NumberFormat('en-US', options).format(num)); // US: 832,342,034.45
-// console.log('Germany:', new Intl.NumberFormat('de-DE', options).format(num)); // Germany: 832.342.034,45
-// console.log('Syria:', new Intl.NumberFormat('ar-SY', options).format(num)); // Syria: ٨٣٢٬٣٤٢٬٠٣٤٫٤٥
-// console.log(
-//   navigator.language,
-//   new Intl.NumberFormat(navigator.language, options).format(num) // en-US 832,342,034.45
-// ); // Syria: ٨٣٢٬٣٤٢٬٠٣٤٫٤٥
+// h1.addEventListener('mouseenter', alertH1);
 
-// // LECTURE: Timers: setTimeout and setInterval
+// // antoerh way of attaching event listener
+// // old way
+// h1.onmouseenter = function (e) {
+//   alert('addEventListener: Great! You are reading the heading! 2');
+// };
 
-// // setTimeout -> runs just once after defined time
-// // setInterval runs forever until we stop it
+// // addEventListener is better --
+// // 1.) allows us to add multiple eventListeners to the same
+// // event
+// // 2.) we can actually remove an eventHandler in case we dont
+// // need it anymore
 
-// const ingredients = ['olives', 'spinach'];
-// const pizzaTimer = setTimeout(
-//   (ing1, ing2) => console.log(`Here is your pizza with ${ing1} and ${ing2}`),
-//   3000,
-//   ...ingredients
+// setTimeout(() => h1.removeEventListener('mouseenter', alertH1), 3000);
+
+// // can also add eventListeners in HTML, but it is not
+// // recommended, as it is pretty old school
+
+// LECTURE: Event Propagation: Bubbling and Capturing
+
+// events have a capturing phase and a bubbling phase
+
+// for example:
+// a click on an href link anchor tag is generated
+// and starts the capturing phase at the root od the document
+// or at the start of the dom tree and travels thru each parent
+// element until it gets to the element that was clicked
+
+// as soon as the event reaches the element, the target phase
+// begins
+
+// after reaching the target, the event bubbles up thru the parent
+// events again and goes thru the bubbling phase
+
+// why is this so important?
+// its as if the event happened in each of the parent elements
+// this means if we attach the same event listener to the
+// section element, it would be handled at both the target
+// element and the section element
+
+// not all types of events have capturing and bubbling phases
+// events propagate
+
+// // LECTURE: Event Propagation in Practice
+
+// // rgb(255,255,255)
+// const randomInt = (min, max) =>
+//   Math.floor(Math.random() * (max - min + 1) + min);
+// const randomColor = () =>
+//   `rgb(${randomInt(0, 255)}, ${randomInt(0, 255)}, ${randomInt(0, 255)})`;
+
+// document.querySelector('.nav__link').addEventListener('click', function (e) {
+//   this.style.backgroundColor = randomColor();
+//   console.log('LINK', e.target, e.currentTarget);
+//   console.log(e.currentTarget === this); // true
+
+//   // Stop propagation
+//   // e.stopPropagation();
+// });
+// document.querySelector('.nav__links').addEventListener('click', function (e) {
+//   this.style.backgroundColor = randomColor();
+//   console.log('CONTAINER', e.target, e.currentTarget);
+// });
+// document.querySelector('.nav').addEventListener(
+//   'click',
+//   function (e) {
+//     this.style.backgroundColor = randomColor();
+//     console.log('NAV', e.target, e.currentTarget);
+//   }
+//   // the nav is now the first to show up, the first one to happen
+//   // when it is set to true. the other two are looking for bubbling events
+//   // but this one goes first because it is capturing. the two others
+//   // happen after
 // );
-// // arguments passed after delay, will be arguments to the function
 
-// console.log('Waiting...');
+// // target for all three event handlers is the same --
+// // the nav__link, this is because of event bubbling, originating
+// // form the link and bubbles up thru the dom tree. we can
+// // then handle the event in all of the parent elements
 
-// // we can cancel timeout if we want, too
-// if (ingredients.includes('spinach')) clearTimeout(pizzaTimer);
+// // addEventListener is only listening for events in the
+// // bubbling phase, not the capturing phase
+// // that is the default behavior of this method b/c the capturing
+// // phase is irrelevant to us
 
-// // JS code execution does not stop at the setTimeout -- it keeps
-// // going thru code and the function eventually executes.
+// // if we wanted to catch events, we can define a third param
+// // in addEventListener function, to true or false (the use
+// // capture parameter), if set to true, the eventHandler
+// // will no longer listen to bubbling events, but instead to
+// // capturing events
 
-// // this is called asynchronous execution
+// // capturing is rarely used nowadays and is older.
 
-// // time param in function is number of seconds in milliseconds
-// // 1000 milliseconds = 1 second
+// LECTURE: Event Delegation: Implementing Page Navigation
 
-// // setInterval
+// implemented in above code
 
-// setInterval(function () {
-//   const now = new Date();
-//   console.log(now);
-// }, 1000);
+// // LECTURE: DOM Traversing
+
+// // walking thru the dom = selecting an element based on
+// // another element. sometimes we need to select, direct child,
+// // or direct parent element, or we dont know the structure of
+// // the DOM at runtime.
+
+// const h1 = document.querySelector('h1');
+
+// // Going downwards: child
+// console.log(h1.querySelectorAll('.highlight'));
+// // logs NodeList(2) [span.highlight, span.highlight]
+// console.log(h1.childNodes);
+// // logs NodeList(9) [text, comment, text, span.highlight, text, br, text, span.highlight, text]0: text1: comment2: text3: span.highlight4: text5: br6: text7: span.highlight8: textlength: 9__proto__: NodeList
+// console.log(h1.children);
+// // logs HTMLCollection(3) [span.highlight, br, span.highlight]0: span.highlight1: br2: span.highlightlength: 3__proto__: HTMLCollection
+
+// h1.firstElementChild.style.color = 'white';
+// h1.lastElementChild.style.color = 'orangered';
+
+// // Going upwards: parents
+// console.log(h1.parentNode);
+// console.log(h1.parentElement);
+
+// h1.closest('.header').style.background = 'var(--gradient-secondary';
+// // we will use this one a lot with event delegation
+
+// h1.closest('h1').style.background = 'var(--gradient-primary';
+
+// // Going sideways: siblings
+// console.log(h1.previousElementSibling); // null
+// console.log(h1.nextElementSibling); // <h4>A simpler banking experience for a simpler life.</h4>
+
+// console.log(h1.previousSibling); // #text
+// console.log(h1.nextSibling); // #text
+
+// console.log(h1.parentElement.children); // HTML collection
+// [...h1.parentElement.children].forEach(function (el) {
+//   if (el !== h1) el.style.transform = 'scale(.5)';
+// });
+
+// LECTURE: Building a Tabbed Component
+
+// built in above code. tabs now work
+
+// LECTURE: Passing Arguments to Event Handlers
+
+// built in above code. navbar now fades on every other item
+// when one item is being mouseovered
+
+// LECTURE: Implementing a Sticky Navigation: The Scroll Event
+
+// sticky nav bar -- sets position to fixed at certain
+// scroll point
+
+// console logging scroll event logged a whole bunch of
+// events on even the slightest
+// scroll, it is recommended to avoid using the scroll
+// event listener, not efficient. should be avoided
+
+// v1 code added to website up above, not ideal though
+// because it uses scroll event listener
+
+// // LECTURE: A Better Way: The Intersection Observer API
+
+// // what is the intersection observer API and why is it
+// // so helpful?
+
+// // it allows our code to observe changes to the way that a
+// // certain target element intersects another element,
+// // or the way it intersects the viewport
+
+// // how it works --
+
+// // start by creating a new intersection observer
+// const obsCallback = function (entries, observer) {
+//   entries.forEach(entry => {
+//     console.log(entry);
+//   });
+// };
+// const obsOptions = {
+//   // needs a root property
+//   // root is the element that the target is intersecting
+//   root: null,
+//   // threshold: 0.1, // 10%
+//   threshold: [0, 0.2],
+//   // 0 means cb will trigger when target element is totally
+//   // out of view and as a soon as it enters the view.
+
+//   // you can have mulitple thresholds in array
+//   // percentage of intersection at which the callback
+//   // will be called
+// };
+// const observer = new IntersectionObserver(obsCallback, obsOptions);
+
+// observer.observe(section1);
+
+// // whenever the target is intersecting the viewport at 10%,
+// // the obsCallback function will be called with two argument
+// // entries and the observer object itself
+
+// LECTURE: Revealing Elements on Scroll
+
+// code added above
+
+// LECTURE: Lazy Loading Images
+
+// add in code above, called the same as the lecture title
+
+// LECTURE: Building a Slider Component: Part 1
+
+// built slider without bottom circle buttons
+// added code above
+
+// LECTURE: Building a Slider Component: Part 2
+
+// slider completed
+
+// LECTURE: Lifecycle DOM Events
